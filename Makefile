@@ -14,3 +14,12 @@ run_pairing:
 
 clean:
 	rm -f run_binary run_eightary run_pairing
+
+clean_binary:
+	rm -f run_binary
+
+clean_eightary:
+	rm -f run_eightary
+
+clean_pairing:
+	rm -f run_pairing
