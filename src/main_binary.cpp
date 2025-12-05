@@ -26,4 +26,22 @@ int main(int argc, char** argv) {
 
     for (int i = 0; i < n; i++)
         std::cout << "dist[" << i << "] = " << dist[i] << "\n";
+
+
+
+    std::ofstream outFile("output.txt");  // You can change the filename here
+
+    if (!outFile) {
+        std::cerr << "Error opening output file.\n";
+        return 1;
+    }
+
+    outFile << "Dijkstra algorithm took " << duration.count() << " seconds.\n";
+
+    for (int i = 0; i < n; i++) {
+        outFile << "dist[" << i << "] = " << dist[i] << "\n";
+    }
+
+    // Close the file (optional, but a good practice)
+    outFile.close();
 }
