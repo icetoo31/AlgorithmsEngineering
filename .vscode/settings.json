@@ -8,7 +8,17 @@
                 "CHERE_INVOKING": "1"
             },
             "icon": "terminal-bash"
+        },
+        "MSYS2 UCRT64 (integrated)": {
+            "path": "C:\\msys64\\usr\\bin\\bash.exe",
+            "args": ["--login", "-i"],
+            "env": {
+                "MSYSTEM": "UCRT64",
+                "CHERE_INVOKING": "1"
+            }
         }
     },
     "terminal.integrated.defaultProfile.windows": "MSYS2-MINGW64"
 }
+
+
