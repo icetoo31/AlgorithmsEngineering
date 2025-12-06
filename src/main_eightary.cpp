@@ -1,32 +1,41 @@
 #include <iostream>
-#include <string>
-
-#include "pq_eightary_heap.cpp"
-#include "load_graph.cpp"
+#include <fstream>
 #include <chrono>
+
+#include "pq_binary_heap.cpp"
+#include "load_graph_new.cpp"
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "Usage: ./run_eightary <inputfile>\n";
+        std::cerr << "Usage: ./run_binary <inputfile>\n";
         return 1;
     }
 
-    std::string filename = argv[1];
+    std::ifstream in(argv[1]);
+    if (!in.is_open()) {
+        std::cerr << "ERROR: Cannot open file\n";
+        return 1;
+    }
 
-    auto adj = load_graph(filename);
-    int n = adj.size();
+    int T;
+    in >> T;
 
-    EightAryHeapPQ pq;
+    for (int t = 0; t < T; ++t) {
+        auto adj = load_graph(in);
+        int n = adj.size();
 
-    auto start = std::chrono::high_resolution_clock::now();
-    auto dist = dijkstra(n, adj, pq);
-    auto end = std::chrono::high_resolution_clock::now();
+        BinaryHeapPQ pq;
 
-    std::chrono::duration<double> duration = end - start;
-    std::cout << "Dijkstra algorithm took " << duration.count() << " seconds.\n";
+        auto start = std::chrono::high_resolution_clock::now();
+        auto dist = dijkstra(n, adj, pq);
+        auto end = std::chrono::high_resolution_clock::now();
 
-    for (int i = 0; i < n; i++)
-        std::cout << "dist[" << i << "] = " << dist[i] << "\n";
+        std::chrono::duration<double> duration = end - start;
+
+        std::cout << "Test " << (t + 1)
+                  << ": " << duration.count()
+                  << " seconds\n";
+    }
 
     return 0;
 }
