@@ -1,9 +1,13 @@
 #include <iostream>
-#include <string>
+#include <fstream>
+#include <chrono>
+#include <iomanip>
+#include <filesystem>
 
 #include "pq_pairing_heap.cpp"
-#include "load_graph.cpp"
-#include <chrono>
+#include "load_graph_new.cpp"   // stream-based loader: load_graph(in)
+
+namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -11,22 +15,45 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::string filename = argv[1];
+    fs::path inputPath = argv[1];
+    std::ifstream in(inputPath);
+    if (!in.is_open()) {
+        std::cerr << "ERROR: Cannot open input file: " << inputPath << "\n";
+        return 1;
+    }
 
-    auto adj = load_graph(filename);
-    int n = adj.size();
+    fs::create_directories("outputs");
+    fs::path outPath = fs::path("outputs") / (inputPath.stem().string() + "_pairing.txt");
 
-    PairingHeapPQ pq;
+    std::ofstream out(outPath);
+    if (!out.is_open()) {
+        std::cerr << "ERROR: Cannot open output file: " << outPath << "\n";
+        return 1;
+    }
 
-    auto start = std::chrono::high_resolution_clock::now();
-    auto dist = dijkstra(n, adj, pq);
-    auto end = std::chrono::high_resolution_clock::now();
+    int T;
+    in >> T;
 
-    std::chrono::duration<double> duration = end - start;
-    std::cout << "Dijkstra algorithm took " << duration.count() << " seconds.\n";
+    out << T << "\n";
+    out << std::fixed << std::setprecision(10);
 
-    for (int i = 0; i < n; i++)
-        std::cout << "dist[" << i << "] = " << dist[i] << "\n";
+    for (int t = 0; t < T; ++t) {
+        auto adj = load_graph(in);
+        int n = (int)adj.size();
 
+        PairingHeapPQ pq;
+
+        auto start = std::chrono::high_resolution_clock::now();
+        auto dist  = dijkstra(n, adj, pq);
+        auto end   = std::chrono::high_resolution_clock::now();
+
+        std::chrono::duration<double> duration = end - start;
+
+        out << duration.count() << "\n";
+        std::cout << "Test " << (t + 1) << ": " << duration.count() << " seconds\n";
+    }
+
+    std::cerr << "Wrote timings to: " << outPath << "\n";
+    
     return 0;
 }

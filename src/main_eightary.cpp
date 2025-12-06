@@ -1,30 +1,50 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#include <iomanip>
+#include <filesystem>
 
-#include "pq_binary_heap.cpp"
+#include "pq_eightary_heap.cpp"
 #include "load_graph_new.cpp"
+
+namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "Usage: ./run_binary <inputfile>\n";
+        std::cerr << "Usage: ./run_eightary <inputfile>\n";
         return 1;
     }
 
-    std::ifstream in(argv[1]);
+    fs::path inputPath = argv[1];
+
+    std::ifstream in(inputPath);
     if (!in.is_open()) {
-        std::cerr << "ERROR: Cannot open file\n";
+        std::cerr << "ERROR: Cannot open input file: " << inputPath << "\n";
+        return 1;
+    }
+
+    fs::path outDir = fs::path("outputs");
+    fs::create_directories(outDir);
+
+    fs::path outPath = outDir / (inputPath.stem().string() + "_eightary.txt");
+
+    std::ofstream out(outPath);
+    if (!out.is_open()) {
+        std::cerr << "ERROR: Cannot open output file: " << outPath << "\n";
         return 1;
     }
 
     int T;
     in >> T;
 
+    out << T << "\n";
+    out << std::fixed << std::setprecision(10);
+
     for (int t = 0; t < T; ++t) {
         auto adj = load_graph(in);
-        int n = adj.size();
+        int n = (int)adj.size();
 
-        BinaryHeapPQ pq;
+        EightAryHeapPQ pq;
 
         auto start = std::chrono::high_resolution_clock::now();
         auto dist = dijkstra(n, adj, pq);
@@ -32,10 +52,12 @@ int main(int argc, char** argv) {
 
         std::chrono::duration<double> duration = end - start;
 
-        std::cout << "Test " << (t + 1)
-                  << ": " << duration.count()
-                  << " seconds\n";
+        out << duration.count() << "\n";
+
+        std::cout << "Test " << (t + 1)<< ": " << duration.count() << " seconds\n";
     }
+
+    std::cerr << "Wrote timings to: " << outPath << "\n";
 
     return 0;
 }
