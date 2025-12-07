@@ -12,10 +12,10 @@ LABELS = {
 }
 
 COLORS = {
-    "b": "tab:blue",
-    "e": "tab:orange",
-    "p": "tab:green",
-    "f": "tab:pink",
+    "b": "#925E78",
+    "e": "#8B9556",
+    "p": "#DD7230",
+    "f": "#537D8D",
 }
 
 LINE_RE = re.compile(r"^\s*([bepf])\s+Nodes:\s*(\d+)\s+Time:\s*([0-9.eE+-]+)\s*$")
@@ -65,7 +65,7 @@ def main():
         ns, avgs = avg[heap]
         if not ns:
             continue
-        plt.plot(ns, avgs, marker="o", label=label, color=COLORS.get(heap))
+        plt.scatter(ns, avgs, s=12, label=label, color=COLORS.get(heap))
 
     plt.xlabel("Number of nodes (n)")
     plt.ylabel("Average runtime (seconds)")
