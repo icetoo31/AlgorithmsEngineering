@@ -76,23 +76,25 @@ int main() {
         std::vector<std::pair<char, PQ*>> heapVariants = {
             {'b', new BinaryHeapPQ()},
             {'e', new EightAryHeapPQ()},
-            {'p', new PairingHeapPQ()}
+            {'p', new PairingHeapPQ()},
+            {'f', new FibonacciHeapPQ()}
         };
 
-        //WARM-UP THE CACHE - NO TIMING
+        //WARM-UP THE CACHE
         for (const auto& heapVariant : heapVariants) {
             PQ* pq = heapVariant.second;
             runDijkstra(*pq, adj, nodes);  // Run once to warm up the cache
         }
-        // Run each heap variant and time it independently
+
+        //FOR EACH HYPE TYPE
         for (const auto& heapVariant : heapVariants) {
             char heapType = heapVariant.first;
             PQ* pq = heapVariant.second;
 
-            // Run and measure the time for this heap
+            //RUN
             double duration = runDijkstra(*pq, adj, nodes);
 
-            // Output the result in the specified format
+            //OUTPUT
             outFile << heapType << " ";
             for (int d : dijkstra(nodes, adj, *pq)) {
                 outFile << d << " ";
