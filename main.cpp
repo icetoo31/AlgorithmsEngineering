@@ -98,7 +98,7 @@ int main() {
             double duration = runDijkstra(*pq, adj, nodes);
 
             //OUTPUT
-            outFile << heapType << " Time: " << std::scientific << duration << "\n";
+            outFile << heapType << " Nodes: " << nodes << " Time: " << std::scientific << duration << "\n";
 
             // GARBAGE COLLECT EACH PRIORITY QUEUE
             delete pq;
