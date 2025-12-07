@@ -4,7 +4,7 @@ import os
 # ---------------- CONFIGURATION ----------------
 
 OUTPUT_DIR = "IO"
-OUTPUT_FILE = "big_sparse_scaling_10_to_1000.txt"
+OUTPUT_FILE = "input.txt"
 
 SEED = 42
 

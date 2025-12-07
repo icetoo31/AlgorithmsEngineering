@@ -1,8 +1,0 @@
-b Nodes: 20 Time: 2.400000e-06
-e Nodes: 20 Time: 3.200000e-06
-p Nodes: 20 Time: 6.300000e-06
-f Nodes: 20 Time: 1.800000e-05
-b Nodes: 20 Time: 2.200000e-06
-e Nodes: 20 Time: 2.700000e-06
-p Nodes: 20 Time: 4.200000e-06
-f Nodes: 20 Time: 7.800000e-06
