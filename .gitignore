@@ -6,3 +6,4 @@ build/
 *.log
 *.obj
 *.o
+*.txt
