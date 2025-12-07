@@ -4,7 +4,8 @@ CXXFLAGS = -std=c++17 -Wall
 
 # Source files and object files
 SRCS = main.cpp dijkstra.cpp
-OBJS = $(SRCS:.cpp=.o)
+OBJ_DIR = objects
+OBJS = $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
 
 # Output binary
 TARGET = program
@@ -17,12 +18,13 @@ $(TARGET): $(OBJS)
 	$(CXX) $(OBJS) -o $(TARGET)
 
 # Rule to compile .cpp files into .o files
-%.o: %.cpp
+$(OBJ_DIR)/%.o: %.cpp
+	@mkdir -p $(OBJ_DIR)  # Create the objects directory if it doesn't exist
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Clean up build files
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET)
 
 # Phony targets
 .PHONY: all clean
