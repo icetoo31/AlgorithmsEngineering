@@ -72,6 +72,9 @@ int main() {
         //Skip the comma separating graphs
         std::getline(inFile, line);
 
+
+        //ACTUALLY IMPORTANT CODE:
+
         // ALL HEAP TYPES TO BE TESTED
         std::vector<std::pair<char, PQ*>> heapVariants = {
             {'b', new BinaryHeapPQ()},
@@ -101,7 +104,7 @@ int main() {
             }
             outFile << "Time: " << std::scientific << duration << "\n";
 
-            // GARBAGE COLLECT THE HEAP
+            // GARBAGE COLLECT EACH PRIORITY QUEUE
             delete pq;
         }
     }
