@@ -11,8 +11,8 @@ SEED = 42
 W_MIN = 1
 W_MAX = 100
 
-EDGE_FACTOR = 3      # sparse: m = 3n
-GRAPHS_PER_SIZE = 100
+EDGE_FACTOR = 2      # sparse: m = 3n
+GRAPHS_PER_SIZE = 1
 
 random.seed(SEED)
 

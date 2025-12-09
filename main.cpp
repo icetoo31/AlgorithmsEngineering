@@ -66,7 +66,7 @@ int main() {
             }
 
             adj[u].push_back({v, w});
-            adj[v].push_back({u, w});  // For undirected graph
+            //adj[v].push_back({u, w});  // For undirected graph
         }
 
         //Skip the comma separating graphs
@@ -99,6 +99,12 @@ int main() {
 
             //OUTPUT
             outFile << heapType << " Nodes: " << nodes << " Time: " << std::scientific << duration << "\n";
+
+            /*outFile << heapType << " ";
+            for (int d : dijkstra(nodes, adj, *pq)) {
+                outFile << d << " ";
+            }
+            outFile << "Time: " << std::scientific << duration << "\n";*/
 
             // GARBAGE COLLECT EACH PRIORITY QUEUE
             delete pq;
