@@ -4,116 +4,201 @@
 #include <vector>
 #include <limits>
 #include <chrono>
+#include <cstdlib>
+#include <ctime>
+#include <utility>
+#include <iomanip>
+#include <cmath> 
+
+// Assuming these are defined in your headers/source files
 #include "headers/dijkstra.h"
 #include "headers/pq_binary_heap.h"
 #include "headers/pq_eightary_heap.h"
 #include "headers/pq_pairing_heap.h"
 #include "headers/pq_fibonacci_heap.h"
 
-// Function to run Dijkstra's algorithm INDEPENDENTLY and return the time taken!
-double runDijkstra(PQ& pq, const std::vector<std::vector<std::pair<int, int>>>& adj, int nodes) {
-    auto start = std::chrono::high_resolution_clock::now();
-    std::vector<int> dist = dijkstra(nodes, adj, pq);
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> duration = end - start;
-    return duration.count();
+// Define the graph structure (Adjacency List)
+using Graph = std::vector<std::vector<std::pair<int, int>>>;
+
+// --- Function to Generate Graph In-Memory (Unchanged) ---
+Graph generate_random_graph(int num_nodes, int num_edges, int max_weight) {
+    Graph adj(num_nodes);
+    
+    for (int i = 0; i < num_edges; ++i) {
+        int u = std::rand() % num_nodes; 
+        int v = std::rand() % num_nodes; 
+        int weight = 1 + (std::rand() % max_weight); 
+        adj[u].push_back({v, weight});
+    }
+    return adj;
 }
 
+// --- Benchmarking/Running Function (Unchanged) ---
+std::vector<int> runDijkstra(PQ& pq, const Graph& adj, int nodes, double& duration) {
+    auto start = std::chrono::high_resolution_clock::now();
+    std::vector<int> dist = dijkstra(nodes, adj, pq); 
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> chrono_duration = end - start;
+    duration = chrono_duration.count();
+    return dist;
+}
+
+// ------------------------------------------------------------------
+// --- Automated Test Case Generator (Unchanged) ---
+// ------------------------------------------------------------------
+
+/**
+ * @brief Generates a list of (Nodes, Edges) pairs based on scaling parameters using a linear step size for N.
+ */
+std::vector<std::pair<int, int>> generate_test_cases(
+    int start_N, 
+    int end_N, 
+    int step_N,
+    double edge_ratio_multiplier,
+    double edge_ratio_exponent
+) {
+    std::vector<std::pair<int, int>> testCases;
+    
+    for (int current_N = start_N; current_N <= end_N; current_N += step_N) {
+        
+        double edges_float = edge_ratio_multiplier * std::pow(current_N, edge_ratio_exponent);
+        int current_M = static_cast<int>(std::round(edges_float));
+        
+        if (current_M < 1) current_M = 1;
+        
+        testCases.push_back({current_N, current_M});
+    }
+
+    return testCases;
+}
+
+
+// --- Main Benchmarking Loop ---
+
 int main() {
-    std::ifstream inFile("IO/input.txt");
-    std::ofstream outFile("IO/output.txt", std::ios::app);
+    // Initialization
+    std::srand(std::time(0)); 
+    const int NUM_TRIALS = 1; 
+    const int MAX_WEIGHT = 1000;
+    
+    // File Streams
+    // Note: ios::trunc is added to verificationFile to ensure it only contains the first run's output.
+    std::ofstream sparseOutFile("IO/sparse_output.txt", std::ios::app);
+    std::ofstream denseOutFile("IO/dense_output.txt", std::ios::app);
+    std::ofstream verificationFile("IO/verification.txt", std::ios::trunc); 
 
-    if (!inFile.is_open()) {
-        std::cerr << "Failed to open the input file." << std::endl;
+    if (!sparseOutFile.is_open() || !denseOutFile.is_open() || !verificationFile.is_open()) {
+        std::cerr << "Failed to open one or more output files." << std::endl;
         return 1;
     }
+    sparseOutFile << std::fixed << std::setprecision(10); 
+    denseOutFile << std::fixed << std::setprecision(10); 
+
+    // ----------------------------------------------------
+    // --- BENCHMARK CONFIGURATION ---
+    // ----------------------------------------------------
+
+    // 1. O(N) Sparsity: M is proportional to N (e.g., M = 5N)
+    std::vector<std::pair<int, int>> sparseCases = generate_test_cases(
+        100,            // start_N
+        1000,          // end_N
+        5000,            // step_N
+        3.0,            // multiplier (c=2)
+        1.0             // exponent (k=1.0 for O(N) -> M = 2*N)
+    );
+
+    // 2. O(N^2) Density: M is proportional to N^2 (e.g., M = 0.5% of N^2)
+    std::vector<std::pair<int, int>> denseCases = generate_test_cases(
+        40000,            // start_N
+        40001,           // end_N
+        5000,            // step_N
+        0.5,          
+        2.0             // exponent (k=2.0 for O(N^2) -> M = N^2)
+    );
     
-    if (!outFile.is_open()) {
-        std::cerr << "Failed to open the output file." << std::endl;
-        return 1;
-    }
-
-    std::string line;
+    // ----------------------------------------------------
+    // --- RUN BENCHMARK ---
+    // ----------------------------------------------------
     
-    while (std::getline(inFile, line)) {
-        if (line.empty()) continue; // Skip empty lines
+    // This flag ensures the verification output only happens for the first test run, 
+    // regardless of whether it's the sparse or dense set.
+    bool is_first_trial_ever = true; 
 
-        // Read number of nodes and edges
-        std::istringstream firstLineStream(line);
-        int nodes, edges;
-        firstLineStream >> nodes >> edges;
+    // Helper function to run a set of test cases
+    auto run_benchmark_set = [&](const std::vector<std::pair<int, int>>& cases, std::ofstream& output_file) {
+        
+        for (const auto& testCase : cases) {
+            int nodes = testCase.first;
+            int edges = testCase.second;
 
-        if (nodes <= 0 || edges < 0) {
-            std::cerr << "Invalid graph parameters: nodes=" << nodes << ", edges=" << edges << std::endl;
-            continue; // Skip this graph if parameters are invalid
-        }
+            if (nodes <= 0 || edges <= 0) continue; 
 
-        std::vector<std::vector<std::pair<int, int>>> adj(nodes);
+            // --- Trials for a single (N, M) configuration ---
+            for (int trial = 1; trial <= NUM_TRIALS; ++trial) {
+                
+                // 1. GENERATE A NEW RANDOM GRAPH FOR THIS TRIAL
+                Graph adj = generate_random_graph(nodes, edges, MAX_WEIGHT);
+                
+                // 2. Re-create PQs for the official timing run
+                std::vector<std::pair<char, PQ*>> runVariants = {
+                    {'b', new BinaryHeapPQ()},
+                    {'e', new EightAryHeapPQ()},
+                    {'p', new PairingHeapPQ()},
+                    {'f', new FibonacciHeapPQ()}
+                };
 
-        // Read the edges
-        for (int i = 0; i < edges; ++i) {
-            if (!std::getline(inFile, line)) {
-                std::cerr << "Edge format error or missing edge at line " << i + 2 << std::endl;
-                break;  // Exit if we can't read all edges
-            }
-            std::istringstream edgeStream(line);
-            int u, v, w;
-            edgeStream >> u >> v >> w;
+                // 3. FOR EACH HEAP TYPE, RUN THE BENCHMARK
+                for (const auto& heapVariant : runVariants) {
+                    char heapType = heapVariant.first;
+                    PQ* pq = heapVariant.second;
+                    double duration = 0.0;
 
-            if (u < 0 || v < 0 || u >= nodes || v >= nodes) {
-                std::cerr << "Invalid edge: " << u << " -> " << v << " for graph with " << nodes << " nodes." << std::endl;
-                continue; // Skip invalid edges
-            }
+                    std::vector<int> distances = runDijkstra(*pq, adj, nodes, duration);
 
-            adj[u].push_back({v, w});
-            //adj[v].push_back({u, w});  // For undirected graph
-        }
+                    // OUTPUT TIME TO THE SPECIFIC FILE
+                    output_file << "Heap: " << heapType << ", N: " << nodes 
+                            << ", M: " << edges << ", Time: " << duration << "\n";
+                    
 
-        //Skip the comma separating graphs
-        std::getline(inFile, line);
+                    // --- DISTANCE VERIFICATION OUTPUT (Only first trial EVER) ---
+                    if (is_first_trial_ever) {
+                        // The verification file will be overwritten for the first 
+                        // run of each heap type, ensuring all four outputs are captured
+                        // for the very first generated graph.
+                        verificationFile << "--- Heap Type: " << heapType << " (N=" << nodes << ", M=" << edges << ") ---\n";
+                        verificationFile << "Trial 1 Distances from Source (Node 0):\n";
+                        for (int j = 0; j < nodes; ++j) {
+                            verificationFile << "Node " << j << ": " << distances[j] << "\n";
+                        }
+                        verificationFile << "\n";
+                    }
+                    
+                    delete pq;
+                }
+                
+                // --- Set the flag to false after the first trial of the first case is complete ---
+                if (is_first_trial_ever) {
+                    is_first_trial_ever = false; 
+                }
+                
+            } // End of NUM_TRIALS loop
+            output_file << "\n"; // Separator between different graph sizes (N, M)
+        } // End of cases loop
+    };
+
+    // Run Sparse Cases (Assumed to be the first set run)
+    run_benchmark_set(sparseCases, sparseOutFile);
+
+    // Run Dense Cases
+    run_benchmark_set(denseCases, denseOutFile);
 
 
-        //ACTUALLY IMPORTANT CODE:
-
-        // ALL HEAP TYPES TO BE TESTED
-        std::vector<std::pair<char, PQ*>> heapVariants = {
-            {'b', new BinaryHeapPQ()},
-            {'e', new EightAryHeapPQ()},
-            {'p', new PairingHeapPQ()},
-            {'f', new FibonacciHeapPQ()}
-        };
-
-        //WARM-UP THE CACHE
-        for (const auto& heapVariant : heapVariants) {
-            PQ* pq = heapVariant.second;
-            runDijkstra(*pq, adj, nodes);  // Run once to warm up the cache
-        }
-
-        //FOR EACH HYPE TYPE
-        for (const auto& heapVariant : heapVariants) {
-            char heapType = heapVariant.first;
-            PQ* pq = heapVariant.second;
-
-            //RUN
-            double duration = runDijkstra(*pq, adj, nodes);
-
-            //OUTPUT
-            outFile << heapType << " Nodes: " << nodes << " Time: " << std::scientific << duration << "\n";
-
-            /*outFile << heapType << " ";
-            for (int d : dijkstra(nodes, adj, *pq)) {
-                outFile << d << " ";
-            }
-            outFile << "Time: " << std::scientific << duration << "\n";*/
-
-            // GARBAGE COLLECT EACH PRIORITY QUEUE
-            delete pq;
-        }
-    }
-
-    // Close the files
-    inFile.close();
-    outFile.close();
+    // Close all files
+    sparseOutFile.close();
+    denseOutFile.close();
+    verificationFile.close();
+    
+    // All terminal prints have been removed.
 
     return 0;
 }

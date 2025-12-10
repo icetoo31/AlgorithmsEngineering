@@ -1,11 +1,15 @@
 #include <cmath>
 #include <vector>
 #include <limits>
+#include <algorithm>
+#include "pq.h" 
+
+// NOTE: Ensure NOT_IN_HEAP (or a similar constant for the other heaps) is defined 
+// using 'inline constexpr' in a single common header to avoid redefinition errors.
 
 // ============================================================
 // True Fibonacci Heap (min-heap)
-// Supports decrease_key with cascading cuts.
-// Safe implementation: explicitly avoids pointer corruption.
+// Non-Lazy implementation: O(1) amortized decrease_key
 // ============================================================
 struct FibonacciHeapPQ : PQ {
 
@@ -28,6 +32,20 @@ struct FibonacciHeapPQ : PQ {
 
     Node* minNode = nullptr;
     int nNodes = 0;
+    
+    // --------------------------------------------------------
+    // Map Graph Node ID to its Heap Node Pointer
+    // --------------------------------------------------------
+    std::vector<Node*> nodeMap;
+    int max_nodes = 0; 
+    
+    // Helper function to resize the map if a new node ID is pushed
+    void ensureNodeMapSize(int node) {
+        if (node >= max_nodes) {
+            max_nodes = node + 1;
+            nodeMap.resize(max_nodes, nullptr);
+        }
+    }
 
     // --------------------------------------------------------
     // Insert node into root list (circular doubly linked)
@@ -48,22 +66,17 @@ struct FibonacciHeapPQ : PQ {
     }
 
     // --------------------------------------------------------
-    // Meld two Fibonacci heaps (not needed externally)
-    // --------------------------------------------------------
-    Node* merge(Node* a, Node* b) {
-        if (!a) return b;
-        if (!b) return a;
-        if (b->dist < a->dist) std::swap(a, b);
-        return a;
-    }
-
-    // --------------------------------------------------------
     // Insert into heap
     // --------------------------------------------------------
     void push(int node, int dist) override {
+        ensureNodeMapSize(node); // Ensure map can hold this node ID
+        
         Node* x = new Node(dist, node);
         addToRootList(x);
         nNodes++;
+        
+        // Store the pointer in the map
+        nodeMap[node] = x;
     }
 
     bool empty() override {
@@ -86,10 +99,11 @@ struct FibonacciHeapPQ : PQ {
             x->child = y;
         } else {
             // Insert into child list
-            y->right = x->child->right;
-            y->left = x->child;
-            x->child->right->left = y;
-            x->child->right = y;
+            Node* current_child = x->child;
+            y->right = current_child->right;
+            y->left = current_child;
+            current_child->right->left = y;
+            current_child->right = y;
         }
 
         x->degree++;
@@ -100,30 +114,32 @@ struct FibonacciHeapPQ : PQ {
     // Consolidate root list after delete-min
     // --------------------------------------------------------
     void consolidate() {
-        int D = std::floor(std::log2(nNodes)) + 3;
+        if (nNodes == 0) return;
+        
+        int D = (int)std::floor(std::log2(nNodes)) + 2; 
         std::vector<Node*> A(D, nullptr);
-
+        
         std::vector<Node*> roots;
         Node* x = minNode;
-        if (x) {
-            do {
-                roots.push_back(x);
-                x = x->right;
-            } while (x != minNode);
-        }
+        do {
+            roots.push_back(x);
+            x = x->right;
+        } while (x != minNode);
 
         for (Node* w : roots) {
             x = w;
             int d = x->degree;
 
-            while (A[d]) {
+            while (d < D && A[d]) {
                 Node* y = A[d];
                 if (y->dist < x->dist) std::swap(x, y);
                 linkTrees(y, x);
                 A[d] = nullptr;
                 d++;
             }
-            A[d] = x;
+            if (d < D) {
+                A[d] = x;
+            }
         }
 
         minNode = nullptr;
@@ -141,18 +157,16 @@ struct FibonacciHeapPQ : PQ {
     // Cut child from parent and add to root list
     // --------------------------------------------------------
     void cut(Node* x, Node* p) {
-        // Remove x from child list
-        if (x->right == x) {
+        if (x->right == x) { 
             p->child = nullptr;
         } else {
             x->right->left = x->left;
             x->left->right = x->right;
             if (p->child == x)
-                p->child = x->right;
+                p->child = x->right; 
         }
         p->degree--;
 
-        // Add to root list
         x->parent = nullptr;
         x->left = x->right = x;
         addToRootList(x);
@@ -170,20 +184,49 @@ struct FibonacciHeapPQ : PQ {
             y->mark = true;
         } else {
             cut(y, p);
-            cascadingCut(p);
+            cascadingCut(p); 
         }
     }
 
     // --------------------------------------------------------
-    // decrease_key — REAL version
+    // decrease_key — TRUE NON-LAZY IMPLEMENTATION (Fixed check)
     // --------------------------------------------------------
     void decrease_key(int node, int newDist) override {
-        // We cannot directly locate the node (you use lazy approach),
-        // so we follow the same strategy as your other PQs:
-        // Insert a new copy — but we still need to allow the real behavior.
-        push(node, newDist);
-    }
+        // 1. Check if node ID is out of bounds or not in the map
+        // FIX: Use size check, ensure node ID is valid before access
+        if ((std::size_t)node >= nodeMap.size()) {
+            // Treat as an initial push
+            push(node, newDist);
+            return;
+        }
+        
+        Node* x = nodeMap[node];
+        
+        if (!x) {
+            // Node pointer is null (never pushed or already popped)
+            push(node, newDist);
+            return;
+        }
+        
+        // 2. Perform the decrease
+        if (newDist >= x->dist) {
+             return; 
+        }
+        x->dist = newDist;
 
+        // 3. Check and cut (if heap property is violated)
+        Node* p = x->parent;
+        if (p && x->dist < p->dist) {
+            cut(x, p); 
+            cascadingCut(p); 
+        }
+
+        // 4. Update min pointer if necessary
+        if (x->dist < minNode->dist) {
+            minNode = x;
+        }
+    }
+    
     // --------------------------------------------------------
     // Extract minimum
     // --------------------------------------------------------
@@ -191,7 +234,6 @@ struct FibonacciHeapPQ : PQ {
         Node* z = minNode;
         if (!z) return {-1, -1};
 
-        // Move children to root list
         if (z->child) {
             Node* c = z->child;
             do {
@@ -202,21 +244,29 @@ struct FibonacciHeapPQ : PQ {
             } while (c != z->child);
         }
 
-        // Remove z from root list
-        if (z->right == z) {
+        z->left->right = z->right;
+        z->right->left = z->left;
+        
+        if (z == z->right) { 
             minNode = nullptr;
         } else {
-            z->left->right = z->right;
-            z->right->left = z->left;
-            minNode = z->right;
+            minNode = z->right; 
             consolidate();
         }
 
+        nodeMap[z->node] = nullptr; 
         int d = z->dist;
         int n = z->node;
         delete z;
         nNodes--;
 
         return {d, n};
+    }
+
+    // Destructor to clean up all nodes
+    ~FibonacciHeapPQ() override {
+        while (minNode) {
+            pop();
+        }
     }
 };
