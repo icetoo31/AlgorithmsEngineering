@@ -8,7 +8,7 @@
 #include <ctime>
 #include <utility>
 #include <iomanip>
-#include <cmath> 
+#include <cmath>
 
 // Assuming these are defined in your headers/source files
 #include "headers/dijkstra.h"
@@ -21,22 +21,25 @@
 using Graph = std::vector<std::vector<std::pair<int, int>>>;
 
 // --- Function to Generate Graph In-Memory (Unchanged) ---
-Graph generate_random_graph(int num_nodes, int num_edges, int max_weight) {
+Graph generate_random_graph(int num_nodes, int num_edges, int max_weight)
+{
     Graph adj(num_nodes);
-    
-    for (int i = 0; i < num_edges; ++i) {
-        int u = std::rand() % num_nodes; 
-        int v = std::rand() % num_nodes; 
-        int weight = 1 + (std::rand() % max_weight); 
+
+    for (int i = 0; i < num_edges; ++i)
+    {
+        int u = std::rand() % num_nodes;
+        int v = std::rand() % num_nodes;
+        int weight = 1 + (std::rand() % max_weight);
         adj[u].push_back({v, weight});
     }
     return adj;
 }
 
 // --- Benchmarking/Running Function (Unchanged) ---
-std::vector<int> runDijkstra(PQ& pq, const Graph& adj, int nodes, double& duration) {
+std::vector<int> runDijkstra(PQ &pq, const Graph &adj, int nodes, double &duration)
+{
     auto start = std::chrono::high_resolution_clock::now();
-    std::vector<int> dist = dijkstra(nodes, adj, pq); 
+    std::vector<int> dist = dijkstra(nodes, adj, pq);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> chrono_duration = end - start;
     duration = chrono_duration.count();
@@ -51,48 +54,51 @@ std::vector<int> runDijkstra(PQ& pq, const Graph& adj, int nodes, double& durati
  * @brief Generates a list of (Nodes, Edges) pairs based on scaling parameters using a linear step size for N.
  */
 std::vector<std::pair<int, int>> generate_test_cases(
-    int start_N, 
-    int end_N, 
+    int start_N,
+    int end_N,
     int step_N,
     double edge_ratio_multiplier,
-    double edge_ratio_exponent
-) {
+    double edge_ratio_exponent)
+{
     std::vector<std::pair<int, int>> testCases;
-    
-    for (int current_N = start_N; current_N <= end_N; current_N += step_N) {
-        
+
+    for (int current_N = start_N; current_N <= end_N; current_N += step_N)
+    {
+
         double edges_float = edge_ratio_multiplier * std::pow(current_N, edge_ratio_exponent);
         int current_M = static_cast<int>(std::round(edges_float));
-        
-        if (current_M < 1) current_M = 1;
-        
+
+        if (current_M < 1)
+            current_M = 1;
+
         testCases.push_back({current_N, current_M});
     }
 
     return testCases;
 }
 
-
 // --- Main Benchmarking Loop ---
 
-int main() {
+int main()
+{
     // Initialization
-    std::srand(std::time(0)); 
-    const int NUM_TRIALS = 1; 
+    std::srand(std::time(0));
+    const int NUM_TRIALS = 10;
     const int MAX_WEIGHT = 1000;
-    
+
     // File Streams
     // Note: ios::trunc is added to verificationFile to ensure it only contains the first run's output.
     std::ofstream sparseOutFile("IO/sparse_output.txt", std::ios::app);
     std::ofstream denseOutFile("IO/dense_output.txt", std::ios::app);
-    std::ofstream verificationFile("IO/verification.txt", std::ios::trunc); 
+    std::ofstream verificationFile("IO/verification.txt", std::ios::trunc);
 
-    if (!sparseOutFile.is_open() || !denseOutFile.is_open() || !verificationFile.is_open()) {
+    if (!sparseOutFile.is_open() || !denseOutFile.is_open() || !verificationFile.is_open())
+    {
         std::cerr << "Failed to open one or more output files." << std::endl;
         return 1;
     }
-    sparseOutFile << std::fixed << std::setprecision(10); 
-    denseOutFile << std::fixed << std::setprecision(10); 
+    sparseOutFile << std::fixed << std::setprecision(10);
+    denseOutFile << std::fixed << std::setprecision(10);
 
     // ----------------------------------------------------
     // --- BENCHMARK CONFIGURATION ---
@@ -100,57 +106,60 @@ int main() {
 
     // 1. O(N) Sparsity: M is proportional to N (e.g., M = 5N)
     std::vector<std::pair<int, int>> sparseCases = generate_test_cases(
-        100,            // start_N
-        1000,          // end_N
-        5000,            // step_N
-        3.0,            // multiplier (c=2)
-        1.0             // exponent (k=1.0 for O(N) -> M = 2*N)
+        100,  // start_N
+        50000, // end_N
+        1000, // step_N
+        3.0,  // multiplier
+        1.0   // exponent (k=1.0 for O(N) -> M = c*N)
     );
 
-    // 2. O(N^2) Density: M is proportional to N^2 (e.g., M = 0.5% of N^2)
+    // 2. O(N^2) Density: M is proportional to N^2
     std::vector<std::pair<int, int>> denseCases = generate_test_cases(
-        40000,            // start_N
-        40001,           // end_N
-        5000,            // step_N
-        0.5,          
-        2.0             // exponent (k=2.0 for O(N^2) -> M = N^2)
+        100, // start_N
+        50000, // end_N
+        2500,  // step_N
+        0.5,
+        2.0 // exponent (k=2.0 for O(N^2) -> M = c*N^2)
     );
-    
+
     // ----------------------------------------------------
     // --- RUN BENCHMARK ---
     // ----------------------------------------------------
-    
-    // This flag ensures the verification output only happens for the first test run, 
+
+    // This flag ensures the verification output only happens for the first test run,
     // regardless of whether it's the sparse or dense set.
-    bool is_first_trial_ever = true; 
+    bool is_first_trial_ever = true;
 
     // Helper function to run a set of test cases
-    auto run_benchmark_set = [&](const std::vector<std::pair<int, int>>& cases, std::ofstream& output_file) {
-        
-        for (const auto& testCase : cases) {
+    auto run_benchmark_set = [&](const std::vector<std::pair<int, int>> &cases, std::ofstream &output_file)
+    {
+        for (const auto &testCase : cases)
+        {
             int nodes = testCase.first;
             int edges = testCase.second;
 
-            if (nodes <= 0 || edges <= 0) continue; 
+            if (nodes <= 0 || edges <= 0)
+                continue;
 
             // --- Trials for a single (N, M) configuration ---
-            for (int trial = 1; trial <= NUM_TRIALS; ++trial) {
-                
+            for (int trial = 1; trial <= NUM_TRIALS; ++trial)
+            {
+
                 // 1. GENERATE A NEW RANDOM GRAPH FOR THIS TRIAL
                 Graph adj = generate_random_graph(nodes, edges, MAX_WEIGHT);
-                
+
                 // 2. Re-create PQs for the official timing run
-                std::vector<std::pair<char, PQ*>> runVariants = {
+                std::vector<std::pair<char, PQ *>> runVariants = {
                     {'b', new BinaryHeapPQ()},
                     {'e', new EightAryHeapPQ()},
                     {'p', new PairingHeapPQ()},
-                    {'f', new FibonacciHeapPQ()}
-                };
+                    {'f', new FibonacciHeapPQ()}};
 
                 // 3. FOR EACH HEAP TYPE, RUN THE BENCHMARK
-                for (const auto& heapVariant : runVariants) {
+                for (const auto &heapVariant : runVariants)
+                {
                     char heapType = heapVariant.first;
-                    PQ* pq = heapVariant.second;
+                    PQ *pq = heapVariant.second;
                     double duration = 0.0;
 
                     // Reset counters before this run
@@ -162,34 +171,55 @@ int main() {
                     long long pops = pq->pop_count;
                     long long decrements = pq->decrease_key_count;
 
-                    // OUTPUT TIME TO THE SPECIFIC FILE
-                    output_file << "Heap: " << heapType << ", N: " << nodes 
-                            << ", M: " << edges << ", Time: " << duration << ", Pushes: " << pushes
-                            << ", DecreaseKey: " << decrements << ", Pops: " << pops << "\n";;
-                    
+                    // Total time (seconds) per operation type from Style A durations
+                    double push_time_total = pq->push_time_acc.count();
+                    double pop_time_total = pq->pop_time_acc.count();
+                    double dec_time_total = pq->decrease_key_time_acc.count();
+
+                    // Average time per operation (seconds per call)
+                    double push_time_avg = (pushes > 0) ? push_time_total / pushes : 0.0;
+                    double pop_time_avg = (pops > 0) ? pop_time_total / pops : 0.0;
+                    double dec_time_avg = (decrements > 0) ? dec_time_total / decrements : 0.0;
+
+                    // OUTPUT TIME AND PER-OP STATS TO THE SPECIFIC FILE
+                    output_file << "Heap: " << heapType << ", N: " << nodes
+                                << ", M: " << edges
+                                << ", Time: " << duration
+                                << ", Pushes: " << pushes
+                                << ", DecreaseKey: " << decrements
+                                << ", Pops: " << pops
+                                << ", PushTimeTotal: " << push_time_total
+                                << ", DecreaseKeyTimeTotal: " << dec_time_total
+                                << ", PopTimeTotal: " << pop_time_total
+                                << ", PushTimeAvg: " << push_time_avg
+                                << ", DecreaseKeyTimeAvg: " << dec_time_avg
+                                << ", PopTimeAvg: " << pop_time_avg
+                                << "\n";
 
                     // --- DISTANCE VERIFICATION OUTPUT (Only first trial EVER) ---
-                    if (is_first_trial_ever) {
-                        // The verification file will be overwritten for the first 
-                        // run of each heap type, ensuring all four outputs are captured
-                        // for the very first generated graph.
-                        verificationFile << "--- Heap Type: " << heapType << " (N=" << nodes << ", M=" << edges << ") ---\n";
+                    if (is_first_trial_ever)
+                    {
+                        verificationFile << "--- Heap Type: " << heapType
+                                         << " (N=" << nodes << ", M=" << edges << ") ---\n";
                         verificationFile << "Trial 1 Distances from Source (Node 0):\n";
-                        for (int j = 0; j < nodes; ++j) {
+                        for (int j = 0; j < nodes; ++j)
+                        {
                             verificationFile << "Node " << j << ": " << distances[j] << "\n";
                         }
                         verificationFile << "\n";
                     }
-                    
+
                     delete pq;
                 }
-                
+
                 // --- Set the flag to false after the first trial of the first case is complete ---
-                if (is_first_trial_ever) {
-                    is_first_trial_ever = false; 
+                if (is_first_trial_ever)
+                {
+                    is_first_trial_ever = false;
                 }
-                
+
             } // End of NUM_TRIALS loop
+
             output_file << "\n"; // Separator between different graph sizes (N, M)
         } // End of cases loop
     };
@@ -200,13 +230,10 @@ int main() {
     // Run Dense Cases
     run_benchmark_set(denseCases, denseOutFile);
 
-
     // Close all files
     sparseOutFile.close();
     denseOutFile.close();
     verificationFile.close();
-    
-    // All terminal prints have been removed.
 
     return 0;
 }

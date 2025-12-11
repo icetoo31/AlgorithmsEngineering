@@ -1,190 +1,237 @@
-import re
 import sys
 from pathlib import Path
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
-# --- Configuration ---
+# --- Configuration ----------------------------------------------------------
+
 LABELS = {
     "b": "Binary heap",
     "e": "8-ary heap",
     "p": "Pairing heap",
-    "f": "Fibonacci heap"
+    "f": "Fibonacci heap",
 }
 
 COLORS = {
     "b": "#925E78",
-    "e": "#8B9556",s
+    "e": "#8B9556",
     "p": "#DD7230",
     "f": "#537D8D",
 }
 
-# Regular Expression to capture Heap, N, M, and Time
-# Format: Heap: b, N: 100, M: 500, Time: 0.0000330000
-LINE_RE = re.compile(r"Heap:\s*([bepf]),\s*N:\s*(\d+),\s*M:\s*(\d+),\s*Time:\s*([0-9.eE+-]+)"
-                     r"(?:,\s*Pushes:\s*(\d+),\s*DecreaseKey:\s*(\d+),\s*Pops:\s*(\d+))?")
+TIME_FIELD      = "Time"
+PUSH_AVG_FIELD  = "PushTimeAvg"
+DEC_AVG_FIELD   = "DecreaseKeyTimeAvg"
+POP_AVG_FIELD   = "PopTimeAvg"
 
-def parse_and_average(path: Path):
-    # time_data[heap][n] = list of runtimes
-    time_data = {h: defaultdict(list) for h in LABELS.keys()}
-s
-    # op_data[metric][heap][n] = list of counts
-    metrics = ["pushes", "decrease", "pops"]
-    op_data = {
-        metric: {h: defaultdict(list) for h in LABELS.keys()}
-        for metric in metrics
+
+# --- Parsing ----------------------------------------------------------------
+
+def parse_file(path: Path):
+    """
+    Parse one output file produced by main.cpp.
+
+    Returns
+    -------
+    avg_time : dict[heap][N] -> avg total Dijkstra runtime
+    avg_ops  : dict[metric][heap][N] -> avg per-operation time
+               metric in {"push", "decrease", "pop"}
+    """
+    raw_time = {h: defaultdict(list) for h in LABELS.keys()}
+    metrics = ("push", "decrease", "pop")
+    raw_ops = {
+        m: {h: defaultdict(list) for h in LABELS.keys()}
+        for m in metrics
     }
 
-    try:
-        with path.open("r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                m = LINE_RE.match(line.strip())
-                if not m:
+    def safe_float(s):
+        try:
+            return float(s)
+        except (TypeError, ValueError):
+            return None
+
+    with path.open("r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("Heap:"):
+                continue
+
+            # split "Key: value" pairs by commas
+            fields = {}
+            for chunk in line.split(","):
+                chunk = chunk.strip()
+                if ":" not in chunk:
                     continue
+                key, val = chunk.split(":", 1)
+                fields[key.strip()] = val.strip()
 
-                heap = m.group(1)
-                n = int(m.group(2))
-                t = float(m.group(4))
+            heap = fields.get("Heap")
+            if heap not in LABELS:
+                continue
 
-                # Always store times
-                time_data[heap][n].append(t)
+            try:
+                n = int(fields.get("N", ""))
+            except ValueError:
+                continue
 
-                # Optional operation counts
-                pushes_str = m.group(5)
-                dec_str    = m.group(6)
-                pops_str   = m.group(7)
+            # total runtime
+            t = safe_float(fields.get(TIME_FIELD))
+            if t is not None:
+                raw_time[heap][n].append(t)
 
-                if pushes_str is not None:
-                    pushes = int(pushes_str)
-                    dec    = int(dec_str)
-                    pops   = int(pops_str)
+            # per-op avg times
+            push_avg = safe_float(fields.get(PUSH_AVG_FIELD))
+            dec_avg  = safe_float(fields.get(DEC_AVG_FIELD))
+            pop_avg  = safe_float(fields.get(POP_AVG_FIELD))
 
-                    op_data["pushes"][heap][n].append(pushes)
-                    op_data["decrease"][heap][n].append(dec)
-                    op_data["pops"][heap][n].append(pops)
-    except FileNotFoundError:
-        return None, None, None, None
+            if push_avg is not None:
+                raw_ops["push"][heap][n].append(push_avg)
+            if dec_avg is not None:
+                raw_ops["decrease"][heap][n].append(dec_avg)
+            if pop_avg is not None:
+                raw_ops["pop"][heap][n].append(pop_avg)
 
-    # Average runtime: avg_time[heap][n] = avg_time
-    avg_time = {}
-    for heap in LABELS.keys():
-        avg_time[heap] = {}
-        for n, times in time_data[heap].items():
-            avg_time[heap][n] = sum(times) / len(times)
+    # averages
+    avg_time = {h: {} for h in LABELS.keys()}
+    for heap, by_n in raw_time.items():
+        for n, vals in by_n.items():
+            if vals:
+                avg_time[heap][n] = sum(vals) / len(vals)
 
-    # Average operations: avg_ops[metric][heap][n] = avg_count
-    avg_ops = {metric: {} for metric in metrics}
+    avg_ops = {m: {h: { } for h in LABELS.keys()} for m in metrics}
     for metric in metrics:
-        for heap in LABELS.keys():
-            avg_ops[metric][heap] = {}
-            for n, vals in op_data[metric][heap].items():
+        for heap, by_n in raw_ops[metric].items():
+            for n, vals in by_n.items():
                 if vals:
                     avg_ops[metric][heap][n] = sum(vals) / len(vals)
 
-    return avg_time, time_data, avg_ops, op_data
+    return avg_time, avg_ops
 
 
-def plot_overall_average(avg_data):
-    # avg_data[heap] = { n: avg_time }
-    
+# --- Plotting helpers -------------------------------------------------------
+
+def _plot_metric(avg_data, ylabel, title, filename):
+    """
+    avg_data: dict[heap][N] -> value
+    """
     out_dir = Path("outputs")
     out_dir.mkdir(exist_ok=True)
-    
+
     plt.figure()
 
     for heap, label in LABELS.items():
         results = avg_data.get(heap)
         if not results:
             continue
-            
-        # Convert dictionary to list of (N, Avg_Time) tuples
-        points = [(n, avg_time) for n, avg_time in results.items()]
-            
-        # Sort by N for clean plotting
-        points.sort(key=lambda x: x[0])
-        ns = [p[0] for p in points]
-        avgs = [p[1] for p in points]
-            
-        # Plot as a line, as the N values are scaling test cases
-        plt.plot(ns, avgs, marker='o', linestyle='-', markersize=5, 
-                 label=label, color=COLORS.get(heap))
+        points = sorted(results.items(), key=lambda x: x[0])
+        ns   = [p[0] for p in points]
+        vals = [p[1] for p in points]
 
-    # --- CHANGES APPLIED HERE ---
-    # Both x-axis and y-axis are now linear (default)
-    plt.xlabel("Number of Nodes (N)")
-    plt.ylabel("Average Runtime (seconds)")
-    plt.title("Dijkstra Runtime Scaling (Overall Average Across Densities)")
-        
-    # Removed: plt.xscale("log") 
-    # Removed: plt.yscale("log") 
-    # ---------------------------
-        
-    plt.legend()
-    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
-
-    out_path = out_dir / f"avg_runtime_overall_linear.png"
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    print(f"Saved plot for Overall Average to: {out_path}")
-
-def plot_operation_metric(avg_for_metric, title, ylabel, filename_suffix):
-    """
-    avg_for_metric: dict[heap][n] -> avg count (for one metric, e.g. pushes)
-    """
-    out_dir = Path("plots")
-    out_dir.mkdir(exist_ok=True)
-
-    plt.figure()
-
-    for heap, label in LABELS.items():
-        ns = sorted(avg_for_metric[heap].keys())
-        if not ns:
-            continue
-        ys = [avg_for_metric[heap][n] for n in ns]
-        plt.plot(ns, ys, marker="o", label=label)
+        plt.plot(
+            ns,
+            vals,
+            marker="o",
+            linestyle="-",
+            markersize=3,
+            label=label,
+            color=COLORS.get(heap),
+        )
 
     plt.xlabel("Number of nodes N")
     plt.ylabel(ylabel)
     plt.title(title)
-
-    # Linear scales (no log)
+    plt.grid(True, linestyle="--", linewidth=0.5)
     plt.legend()
-    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
-
-    out_path = out_dir / f"{filename_suffix}_overall_linear.png"
     plt.tight_layout()
+
+    out_path = out_dir / filename
     plt.savefig(out_path, dpi=200)
-    print(f"Saved plot for {title} to: {out_path}")
+    plt.close()
+    print(f"Saved {out_path}")
 
 
-def plot_operation_metric(avg_for_metric, title, ylabel, filename_suffix):
+def make_plots_for_file(path: Path):
     """
-    avg_for_metric: dict[heap][n] -> avg count (for one metric, e.g. pushes)
+    For a single file (sparse or dense), produce:
+      - runtime plot
+      - avg push time
+      - avg decrease-key time
+      - avg pop time
+    with filenames prefixed by the file stem ('sparse', 'dense', etc.).
     """
-    out_dir = Path("plots")
-    out_dir.mkdir(exist_ok=True)
+    print(f"\n=== Processing {path} ===")
+    avg_time, avg_ops = parse_file(path)
 
-    plt.figure()
+    # derive prefix from filename (e.g. 'sparse_output.txt' -> 'sparse')
+    stem = path.stem
+    if "sparse" in stem.lower():
+        prefix = "sparse_"
+    elif "dense" in stem.lower():
+        prefix = "dense_"
+    else:
+        prefix = stem + "_"
 
-    for heap, label in LABELS.items():
-        ns = sorted(avg_for_metric[heap].keys())
-        if not ns:
+    # 1) overall runtime
+    _plot_metric(
+        avg_time,
+        ylabel="Average Dijkstra runtime (s)",
+        title=f"Runtime vs N ({prefix.rstrip('_')})",
+        filename=f"{prefix}avg_runtime.png",
+    )
+
+    # 2) per-op averages
+    metric_info = {
+        "push": (
+            "Average time per Insert-key (s)",
+            f"{prefix}avg_push_time.png",
+        ),
+        "decrease": (
+            "Average time per Decrease key (s)",
+            f"{prefix}avg_decrease_key_time.png",
+        ),
+        "pop": (
+            "Average time per Extract-min (s)",
+            f"{prefix}avg_pop_time.png",
+        ),
+    }
+
+    for metric, (ylabel, fname) in metric_info.items():
+        data = avg_ops.get(metric, {})
+        has_any = any(len(by_n) > 0 for by_n in data.values())
+        if not has_any:
+            print(f"[WARN] no data for metric '{metric}' in {path.name}, skipping.")
             continue
-        ys = [avg_for_metric[heap][n] for n in ns]
-        plt.plot(ns, ys, marker="o", label=label)
 
-    plt.xlabel("Number of nodes N")
-    plt.ylabel(ylabel)
-    plt.title(title)
+        _plot_metric(
+            data,
+            ylabel=ylabel,
+            title=f"{ylabel} vs N ({prefix.rstrip('_')})",
+            filename=fname,
+        )
 
-    # Linear scales (no log)
-    plt.legend()
-    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
 
-    out_path = out_dir / f"{filename_suffix}_overall_linear.png"
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    print(f"Saved plot for {title} to: {out_path}")
+# --- Main -------------------------------------------------------------------
+
+def main():
+    # If no args: default to sparse_output.txt and dense_output.txt next to IO/
+    if len(sys.argv) <= 1:
+        candidates = [
+            Path("IO/sparse_output.txt"),
+            Path("IO/dense_output.txt"),
+        ]
+        paths = [p for p in candidates if p.exists()]
+        if not paths:
+            print("Usage: python plots.py <output1> [<output2> ...]")
+            print("Or place IO/sparse_output.txt and IO/dense_output.txt and run without arguments.")
+            sys.exit(1)
+    else:
+        paths = [Path(arg) for arg in sys.argv[1:]]
+
+    for p in paths:
+        if not p.exists():
+            print(f"WARNING: {p} does not exist, skipping.")
+            continue
+        make_plots_for_file(p)
 
 
 if __name__ == "__main__":

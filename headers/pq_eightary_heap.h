@@ -2,7 +2,7 @@
 #include <utility>
 #include <algorithm>
 #include <limits>
-#include "pq.h" 
+#include "pq.h"
 
 // NOTE: The definition of NOT_IN_HEAP MUST be removed from here
 // and defined only once (e.g., using 'inline constexpr int NOT_IN_HEAP = -1;'
@@ -16,11 +16,12 @@
 
 struct EightAryHeapPQ : PQ {
 
+
     static const int D = 8;    // branching factor
 
     struct Entry {
         int dist, node;
-        int index_in_heap; 
+        int index_in_heap;
     };
 
     std::vector<Entry*> heap;
@@ -34,7 +35,7 @@ struct EightAryHeapPQ : PQ {
     void swap_entries(int i, int j) {
         Entry* ei = heap[i];
         Entry* ej = heap[j];
-        
+
         std::swap(heap[i], heap[j]);
 
         ei->index_in_heap = j;
@@ -55,13 +56,13 @@ struct EightAryHeapPQ : PQ {
     }
 
     void sift_down(int i) {
-        const std::size_t n = heap.size(); 
+        const std::size_t n = heap.size();
         while (true) {
             int best = i;
 
             for (int k = 1; k <= D; k++) {
                 std::size_t child_idx = (std::size_t)i * D + k;
-                
+
                 if (child_idx < n && heap[child_idx]->dist < heap[best]->dist)
                     best = (int)child_idx;
             }
@@ -77,14 +78,14 @@ struct EightAryHeapPQ : PQ {
     // --------------------------------------------------------
     // PQ Interface Implementations
     // --------------------------------------------------------
-    
+
     bool empty() override {
         return heap.empty();
     }
 
     void push(int node, int dist) override {
+        auto t0 = Clock::now();
         ++push_count;
-
 
         // NOTE: We assume NOT_IN_HEAP is defined and accessible here.
         if (node >= max_nodes) {
@@ -102,9 +103,13 @@ struct EightAryHeapPQ : PQ {
         node_to_index[node] = index;
 
         sift_up(index);
+
+        auto t1 = Clock::now();
+        push_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
 
     std::pair<int,int> pop() override {
+        auto t0 = Clock::now();
         ++pop_count;
 
         Entry* root_entry = heap[0];
@@ -126,10 +131,15 @@ struct EightAryHeapPQ : PQ {
         }
 
         delete root_entry;
+
+        auto t1 = Clock::now();
+        pop_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
+
         return {d, n};
     }
 
     void decrease_key(int node, int dist) override {
+        auto t0 = Clock::now();
         ++decrease_key_count;
 
         // NOTE: We assume NOT_IN_HEAP is defined and accessible here.
@@ -145,8 +155,11 @@ struct EightAryHeapPQ : PQ {
             entry->dist = dist;
             sift_up(index);
         }
+
+        auto t1 = Clock::now();
+        decrease_key_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
-    
+
     ~EightAryHeapPQ() override {
         for (Entry* e : heap) {
             delete e;

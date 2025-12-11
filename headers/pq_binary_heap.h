@@ -1,49 +1,57 @@
+#ifndef PQ_BINARY_HEAP_H
+#define PQ_BINARY_HEAP_H
+
 #include <vector>
-#include <utility>
-#include <limits>
 #include <algorithm>
-#include "pq.h" // Assuming pq.h defines the base class PQ
+#include "pq.h"
 
-// Define a constant for an "invalid" index to mark nodes not in the heap
-inline constexpr int NOT_IN_HEAP = -1;
-
+// ------------------------------------------------------------
+// Binary heap implementation (min-heap) with explicit index map
+// ------------------------------------------------------------
 struct BinaryHeapPQ : PQ {
 
-    // --------------------------------------------------------
-    // Entry structure: stores dist, node ID, and its current index in the heap array
-    // --------------------------------------------------------
     struct Entry {
         int dist;
         int node;
-        int index_in_heap; // Points to its own position in the 'heap' vector
+        int index_in_heap;
     };
 
-    // The actual heap storage (min-heap)
-    std::vector<Entry*> heap;
+    std::vector<Entry*> heap;       // heap array
+    std::vector<int>    node_to_index; // node -> index in heap, or NOT_IN_HEAP
 
-    // The mapping from graph node ID to its entry's current position in the 'heap' vector
-    std::vector<int> node_to_index;
+    BinaryHeapPQ() = default;
 
-    // Max number of nodes in the graph (needed for vector size)
-    int max_nodes = 0;
+    ~BinaryHeapPQ() override {
+        for (Entry* e : heap) {
+            delete e;
+        }
+    }
 
-    // --------------------------------------------------------
-    // Heap Helper Functions
-    // --------------------------------------------------------
+    // This overrides PQ::empty()  (same signature, no const)
+    bool empty() override {
+        return heap.empty();
+    }
+
+private:
+    void ensure_node_capacity(int node) {
+        if (node < 0) return;
+        if (node >= static_cast<int>(node_to_index.size())) {
+            node_to_index.resize(node + 1, NOT_IN_HEAP);
+        }
+    }
 
     void swap_entries(int i, int j) {
+        if (i == j) return;
         Entry* ei = heap[i];
         Entry* ej = heap[j];
-        
-        std::swap(heap[i], heap[j]);
-
+        heap[i] = ej;
+        heap[j] = ei;
         ei->index_in_heap = j;
         ej->index_in_heap = i;
-
         node_to_index[ei->node] = j;
         node_to_index[ej->node] = i;
     }
-    
+
     void bubble_up(int i) {
         while (i > 0) {
             int parent = (i - 1) / 2;
@@ -57,106 +65,104 @@ struct BinaryHeapPQ : PQ {
     }
 
     void bubble_down(int i) {
-        int n = heap.size();
+        int n = static_cast<int>(heap.size());
         while (true) {
-            int left = 2 * i + 1;
+            int left  = 2 * i + 1;
             int right = 2 * i + 2;
-            int smallest = i;
+            int best  = i;
 
-            if (left < n && heap[left]->dist < heap[smallest]->dist) {
-                smallest = left;
-            }
-            if (right < n && heap[right]->dist < heap[smallest]->dist) {
-                smallest = right;
-            }
+            if (left < n && heap[left]->dist < heap[best]->dist)
+                best = left;
+            if (right < n && heap[right]->dist < heap[best]->dist)
+                best = right;
 
-            if (smallest != i) {
-                swap_entries(i, smallest);
-                i = smallest;
-            } else {
-                break;
-            }
+            if (best == i) break;
+
+            swap_entries(i, best);
+            i = best;
         }
     }
 
-    // --------------------------------------------------------
-    // PQ Interface Implementations
-    // --------------------------------------------------------
-
+public:
     void push(int node, int dist) override {
+        auto t0 = Clock::now();
         ++push_count;
 
-        if (node >= max_nodes) {
-            max_nodes = node + 1;
-            node_to_index.resize(max_nodes, NOT_IN_HEAP);
-        } else if (node_to_index.empty()) {
-            max_nodes = (node + 1) > max_nodes ? (node + 1) : max_nodes;
-            node_to_index.resize(max_nodes, NOT_IN_HEAP);
-        }
+        ensure_node_capacity(node);
 
-        int index = heap.size();
-        Entry* newEntry = new Entry{dist, node, index};
-
-        heap.push_back(newEntry);
+        int index = static_cast<int>(heap.size());
+        Entry* e = new Entry{dist, node, index};
+        heap.push_back(e);
         node_to_index[node] = index;
 
         bubble_up(index);
+
+        auto t1 = Clock::now();
+        push_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
 
-    bool empty() override {
-        return heap.empty();
-    }
-
-    std::pair<int, int> pop() override {
+    std::pair<int,int> pop() override {
+        auto t0 = Clock::now();
         ++pop_count;
 
-        Entry* root_entry = heap[0];
-        int d = root_entry->dist;
-        int n = root_entry->node;
+        if (heap.empty()) {
+            auto t1 = Clock::now();
+            pop_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
+            return {-1, -1};
+        }
+
+        Entry* root = heap[0];
+        int d = root->dist;
+        int n = root->node;
 
         node_to_index[n] = NOT_IN_HEAP;
 
-        int last_index = heap.size() - 1;
+        int last_index = static_cast<int>(heap.size()) - 1;
         if (last_index > 0) {
-            Entry* last_entry = heap.back();
-            heap[0] = last_entry;
-            last_entry->index_in_heap = 0;
-            node_to_index[last_entry->node] = 0;
+            Entry* last = heap[last_index];
+            heap[0] = last;
+            last->index_in_heap = 0;
+            node_to_index[last->node] = 0;
             heap.pop_back();
             bubble_down(0);
         } else {
             heap.pop_back();
         }
 
-        delete root_entry;
+        delete root;
+
+        auto t1 = Clock::now();
+        pop_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
+
         return {d, n};
     }
 
-    // --------------------------------------------------------
-    // Non-lazy decrease-key: Find the entry, update its value, and bubble it up
-    // FIX: Cast 'node' to std::size_t to resolve the signed/unsigned warning
-    // --------------------------------------------------------
     void decrease_key(int node, int dist) override {
+        auto t0 = Clock::now();
         ++decrease_key_count;
 
-        // FIX APPLIED: Cast 'node' to std::size_t for comparison with vector::size()
-        if ((std::size_t)node >= node_to_index.size() || node_to_index[node] == NOT_IN_HEAP) {
+        ensure_node_capacity(node);
+
+        if (node < 0 || node >= static_cast<int>(node_to_index.size()) ||
+            node_to_index[node] == NOT_IN_HEAP) {
+            // Not in heap yet -> treat as push
+            auto t1 = Clock::now();
+            decrease_key_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
             push(node, dist);
             return;
         }
 
         int index = node_to_index[node];
-        Entry* entry = heap[index];
+        Entry* e = heap[index];
 
-        if (dist < entry->dist) {
-            entry->dist = dist;
+        if (dist < e->dist) {
+            e->dist = dist;
             bubble_up(index);
         }
-    }
 
-    ~BinaryHeapPQ() override {
-        for (Entry* e : heap) {
-            delete e;
-        }
+        auto t1 = Clock::now();
+        decrease_key_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
 };
+
+#endif // PQ_BINARY_HEAP_H

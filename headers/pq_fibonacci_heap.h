@@ -2,9 +2,9 @@
 #include <vector>
 #include <limits>
 #include <algorithm>
-#include "pq.h" 
+#include "pq.h"
 
-// NOTE: Ensure NOT_IN_HEAP (or a similar constant for the other heaps) is defined 
+// NOTE: Ensure NOT_IN_HEAP (or a similar constant for the other heaps) is defined
 // using 'inline constexpr' in a single common header to avoid redefinition errors.
 
 // ============================================================
@@ -12,7 +12,6 @@
 // Non-Lazy implementation: O(1) amortized decrease_key
 // ============================================================
 struct FibonacciHeapPQ : PQ {
-
     // --------------------------------------------------------
     // Node structure
     // --------------------------------------------------------
@@ -32,13 +31,13 @@ struct FibonacciHeapPQ : PQ {
 
     Node* minNode = nullptr;
     int nNodes = 0;
-    
+
     // --------------------------------------------------------
     // Map Graph Node ID to its Heap Node Pointer
     // --------------------------------------------------------
     std::vector<Node*> nodeMap;
-    int max_nodes = 0; 
-    
+    int max_nodes = 0;
+
     // Helper function to resize the map if a new node ID is pushed
     void ensureNodeMapSize(int node) {
         if (node >= max_nodes) {
@@ -69,16 +68,20 @@ struct FibonacciHeapPQ : PQ {
     // Insert into heap
     // --------------------------------------------------------
     void push(int node, int dist) override {
+        auto t0 = Clock::now();
         ++push_count;
 
         ensureNodeMapSize(node); // Ensure map can hold this node ID
-        
+
         Node* x = new Node(dist, node);
         addToRootList(x);
         nNodes++;
-        
+
         // Store the pointer in the map
         nodeMap[node] = x;
+
+        auto t1 = Clock::now();
+        push_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
 
     bool empty() override {
@@ -117,10 +120,10 @@ struct FibonacciHeapPQ : PQ {
     // --------------------------------------------------------
     void consolidate() {
         if (nNodes == 0) return;
-        
-        int D = (int)std::floor(std::log2(nNodes)) + 2; 
+
+        int D = (int)std::floor(std::log2(nNodes)) + 2;
         std::vector<Node*> A(D, nullptr);
-        
+
         std::vector<Node*> roots;
         Node* x = minNode;
         do {
@@ -159,13 +162,13 @@ struct FibonacciHeapPQ : PQ {
     // Cut child from parent and add to root list
     // --------------------------------------------------------
     void cut(Node* x, Node* p) {
-        if (x->right == x) { 
+        if (x->right == x) {
             p->child = nullptr;
         } else {
             x->right->left = x->left;
             x->left->right = x->right;
             if (p->child == x)
-                p->child = x->right; 
+                p->child = x->right;
         }
         p->degree--;
 
@@ -186,7 +189,7 @@ struct FibonacciHeapPQ : PQ {
             y->mark = true;
         } else {
             cut(y, p);
-            cascadingCut(p); 
+            cascadingCut(p);
         }
     }
 
@@ -194,6 +197,7 @@ struct FibonacciHeapPQ : PQ {
     // decrease_key — TRUE NON-LAZY IMPLEMENTATION (Fixed check)
     // --------------------------------------------------------
     void decrease_key(int node, int newDist) override {
+        auto t0 = Clock::now();
         ++decrease_key_count;
 
         // 1. Check if node ID is out of bounds or not in the map
@@ -203,38 +207,42 @@ struct FibonacciHeapPQ : PQ {
             push(node, newDist);
             return;
         }
-        
+
         Node* x = nodeMap[node];
-        
+
         if (!x) {
             // Node pointer is null (never pushed or already popped)
             push(node, newDist);
             return;
         }
-        
+
         // 2. Perform the decrease
         if (newDist >= x->dist) {
-             return; 
+             return;
         }
         x->dist = newDist;
 
         // 3. Check and cut (if heap property is violated)
         Node* p = x->parent;
         if (p && x->dist < p->dist) {
-            cut(x, p); 
-            cascadingCut(p); 
+            cut(x, p);
+            cascadingCut(p);
         }
 
         // 4. Update min pointer if necessary
         if (x->dist < minNode->dist) {
             minNode = x;
         }
+
+        auto t1 = Clock::now();
+        decrease_key_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
-    
+
     // --------------------------------------------------------
     // Extract minimum
     // --------------------------------------------------------
     std::pair<int,int> pop() override {
+        auto t0 = Clock::now();
         ++pop_count;
 
         Node* z = minNode;
@@ -252,19 +260,22 @@ struct FibonacciHeapPQ : PQ {
 
         z->left->right = z->right;
         z->right->left = z->left;
-        
-        if (z == z->right) { 
+
+        if (z == z->right) {
             minNode = nullptr;
         } else {
-            minNode = z->right; 
+            minNode = z->right;
             consolidate();
         }
 
-        nodeMap[z->node] = nullptr; 
+        nodeMap[z->node] = nullptr;
         int d = z->dist;
         int n = z->node;
         delete z;
         nNodes--;
+
+        auto t1 = Clock::now();
+        pop_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
 
         return {d, n};
     }

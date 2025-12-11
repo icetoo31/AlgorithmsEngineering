@@ -10,6 +10,7 @@
 
 struct PairingHeapPQ : PQ {
 
+
     // --------------------------------------------------------
     // Node structure for pairing heap
     // Added 'parent' pointer to support O(1) cut operation
@@ -19,9 +20,9 @@ struct PairingHeapPQ : PQ {
         Node* child;    // leftmost child
         Node* sibling;  // next sibling
         Node* parent;   // <--- NEW: Pointer to the parent node
-        
+
         Node(int d, int n) : dist(d), node(n), child(nullptr), sibling(nullptr), parent(nullptr) {}
-        
+
         // Helper to detach a node from its parent/siblings for cut operation
         // This is necessary for a truly non-lazy implementation.
         void detach() {
@@ -61,17 +62,17 @@ struct PairingHeapPQ : PQ {
         b->parent = a;          // Set parent for b
         b->sibling = a->child;
         if (a->child) {
-            // Note: We don't need to update the old first child's parent/sibling, 
+            // Note: We don't need to update the old first child's parent/sibling,
             // as 'a->child' is now pointing to the old child's sibling list head.
         }
         a->child = b;
-        
+
         return a;
     }
 
     // --------------------------------------------------------
     // Two-pass merge (recursive pairing)
-    // No change required to the logic, as parent pointers are reset 
+    // No change required to the logic, as parent pointers are reset
     // during the merge process.
     // --------------------------------------------------------
     Node* two_pass_merge(Node* first) {
@@ -105,7 +106,7 @@ struct PairingHeapPQ : PQ {
 
         return arr[0];
     }
-    
+
     // --------------------------------------------------------
     // Cut a node from the heap structure and merge it with the root.
     // This is the O(1) amortized operation for non-lazy decrease_key.
@@ -113,7 +114,7 @@ struct PairingHeapPQ : PQ {
     void cut_and_merge(Node* n) {
         // If n is the root, there is nothing to cut.
         if (n == root) return;
-        
+
         // 1. Cut the node from its parent/sibling list
         n->detach(); // Uses the helper function to fix parent/sibling pointers
 
@@ -126,11 +127,15 @@ struct PairingHeapPQ : PQ {
     // Insert new node (only called on first visit in some Dijkstra setups)
     // --------------------------------------------------------
     void push(int node, int dist) override {
+        auto t0 = Clock::now();
         ++push_count;
 
         Node* newNode = new Node(dist, node);
         root = merge(root, newNode);
         nodeMap[node] = newNode;
+
+        auto t1 = Clock::now();
+        push_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
 
     bool empty() override {
@@ -141,6 +146,7 @@ struct PairingHeapPQ : PQ {
     // Extract-min
     // --------------------------------------------------------
     std::pair<int, int> pop() override {
+        auto t0 = Clock::now();
         ++pop_count;
 
         if (!root) return {-1, -1}; // Handle empty case safely
@@ -150,7 +156,7 @@ struct PairingHeapPQ : PQ {
         int n = old->node;
 
         // The children of the old root become a forest.
-        // We need to reset the parent pointers for all children 
+        // We need to reset the parent pointers for all children
         // before two_pass_merge is called on them.
         Node* child = old->child;
         while(child) {
@@ -162,6 +168,10 @@ struct PairingHeapPQ : PQ {
         nodeMap.erase(n); // Remove the node from the map
 
         delete old;
+
+        auto t1 = Clock::now();
+        pop_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
+
         return {d, n};
     }
 
@@ -170,13 +180,14 @@ struct PairingHeapPQ : PQ {
     // This correctly maintains the heap structure.
     // --------------------------------------------------------
     void decrease_key(int node, int dist) override {
+        auto t0 = Clock::now();
         ++decrease_key_count;
 
         auto it = nodeMap.find(node);
-        
+
         if (it != nodeMap.end()) {
             Node* n = it->second;
-            
+
             // The node is already in the heap
             if (dist < n->dist) {
                 n->dist = dist; // Update the distance
@@ -187,6 +198,9 @@ struct PairingHeapPQ : PQ {
             // This handles the 'handles push OR decrease-key' comment in dijkstra.cpp.
             push(node, dist);
         }
+
+        auto t1 = Clock::now();
+        decrease_key_time_acc += std::chrono::duration_cast<Duration>(t1 - t0);
     }
 
     // Destructor to clean up memory
@@ -197,15 +211,15 @@ struct PairingHeapPQ : PQ {
         // Simple BFS/DFS to traverse and delete all nodes
         for (size_t i = 0; i < nodes_to_delete.size(); ++i) {
             Node* current = nodes_to_delete[i];
-            
+
             // Add all children
             Node* child = current->child;
             while(child) {
                 nodes_to_delete.push_back(child);
                 child = child->sibling;
             }
-            
-            // The sibling link is already covered by the children traversal, 
+
+            // The sibling link is already covered by the children traversal,
             // as children become root-level nodes during pop.
         }
 
