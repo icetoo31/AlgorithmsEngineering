@@ -76,30 +76,25 @@ def plot_overall_average(avg_data):
         ns = [p[0] for p in points]
         avgs = [p[1] for p in points]
             
-        # Plot as a line, as the N values are scaling test cases
-        plt.plot(ns, avgs, marker='o', linestyle='-', markersize=5, 
-                 label=label, color=COLORS.get(heap))
+        # Plot as scatter (no lines)
+        plt.scatter(ns, avgs, s=5, label=label, color=COLORS.get(heap))
+        # plt.plot(ns, avgs, label=label, color=COLORS.get(heap))
 
-    # --- CHANGES APPLIED HERE ---
-    # Both x-axis and y-axis are now linear (default)
     plt.xlabel("Number of Nodes (N)")
     plt.ylabel("Average Runtime (seconds)")
     plt.title("Dijkstra Runtime Scaling (Overall Average Across Densities)")
         
-    # Removed: plt.xscale("log") 
-    # Removed: plt.yscale("log") 
-    # ---------------------------
-        
     plt.legend()
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
 
-    out_path = out_dir / f"avg_runtime_overall_linear.png"
+    out_path = out_dir / f"dense_measurements.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=200)
-    print(f"Saved plot for Overall Average to: {out_path}")
+    print(f"Saved scatter plot for Overall Average to: {out_path}")
 
 
-def main(input_filename="IO/dense_output.txt"):
+
+def main(input_filename="IO/dense_output_2.txt"):
     # Allow passing the filename via command line arguments
     in_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(input_filename)
     
