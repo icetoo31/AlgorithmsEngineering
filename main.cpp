@@ -153,11 +153,19 @@ int main() {
                     PQ* pq = heapVariant.second;
                     double duration = 0.0;
 
+                    // Reset counters before this run
+                    pq->reset_counters();
+
                     std::vector<int> distances = runDijkstra(*pq, adj, nodes, duration);
+
+                    long long pushes = pq->push_count;
+                    long long pops = pq->pop_count;
+                    long long decrements = pq->decrease_key_count;
 
                     // OUTPUT TIME TO THE SPECIFIC FILE
                     output_file << "Heap: " << heapType << ", N: " << nodes 
-                            << ", M: " << edges << ", Time: " << duration << "\n";
+                            << ", M: " << edges << ", Time: " << duration << ", Pushes: " << pushes
+                            << ", DecreaseKey: " << decrements << ", Pops: " << pops << "\n";;
                     
 
                     // --- DISTANCE VERIFICATION OUTPUT (Only first trial EVER) ---

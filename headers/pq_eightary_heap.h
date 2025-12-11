@@ -83,6 +83,9 @@ struct EightAryHeapPQ : PQ {
     }
 
     void push(int node, int dist) override {
+        ++push_count;
+
+
         // NOTE: We assume NOT_IN_HEAP is defined and accessible here.
         if (node >= max_nodes) {
             max_nodes = node + 1;
@@ -102,6 +105,8 @@ struct EightAryHeapPQ : PQ {
     }
 
     std::pair<int,int> pop() override {
+        ++pop_count;
+
         Entry* root_entry = heap[0];
         int d = root_entry->dist;
         int n = root_entry->node;
@@ -125,6 +130,8 @@ struct EightAryHeapPQ : PQ {
     }
 
     void decrease_key(int node, int dist) override {
+        ++decrease_key_count;
+
         // NOTE: We assume NOT_IN_HEAP is defined and accessible here.
         if ((std::size_t)node >= node_to_index.size() || node_to_index[node] == NOT_IN_HEAP) {
             push(node, dist);

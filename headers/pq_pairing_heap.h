@@ -126,6 +126,8 @@ struct PairingHeapPQ : PQ {
     // Insert new node (only called on first visit in some Dijkstra setups)
     // --------------------------------------------------------
     void push(int node, int dist) override {
+        ++push_count;
+
         Node* newNode = new Node(dist, node);
         root = merge(root, newNode);
         nodeMap[node] = newNode;
@@ -139,6 +141,8 @@ struct PairingHeapPQ : PQ {
     // Extract-min
     // --------------------------------------------------------
     std::pair<int, int> pop() override {
+        ++pop_count;
+
         if (!root) return {-1, -1}; // Handle empty case safely
 
         Node* old = root;
@@ -166,6 +170,8 @@ struct PairingHeapPQ : PQ {
     // This correctly maintains the heap structure.
     // --------------------------------------------------------
     void decrease_key(int node, int dist) override {
+        ++decrease_key_count;
+
         auto it = nodeMap.find(node);
         
         if (it != nodeMap.end()) {

@@ -69,6 +69,8 @@ struct FibonacciHeapPQ : PQ {
     // Insert into heap
     // --------------------------------------------------------
     void push(int node, int dist) override {
+        ++push_count;
+
         ensureNodeMapSize(node); // Ensure map can hold this node ID
         
         Node* x = new Node(dist, node);
@@ -192,6 +194,8 @@ struct FibonacciHeapPQ : PQ {
     // decrease_key — TRUE NON-LAZY IMPLEMENTATION (Fixed check)
     // --------------------------------------------------------
     void decrease_key(int node, int newDist) override {
+        ++decrease_key_count;
+
         // 1. Check if node ID is out of bounds or not in the map
         // FIX: Use size check, ensure node ID is valid before access
         if ((std::size_t)node >= nodeMap.size()) {
@@ -231,6 +235,8 @@ struct FibonacciHeapPQ : PQ {
     // Extract minimum
     // --------------------------------------------------------
     std::pair<int,int> pop() override {
+        ++pop_count;
+
         Node* z = minNode;
         if (!z) return {-1, -1};
 

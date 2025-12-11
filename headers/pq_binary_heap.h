@@ -84,6 +84,8 @@ struct BinaryHeapPQ : PQ {
     // --------------------------------------------------------
 
     void push(int node, int dist) override {
+        ++push_count;
+
         if (node >= max_nodes) {
             max_nodes = node + 1;
             node_to_index.resize(max_nodes, NOT_IN_HEAP);
@@ -106,6 +108,8 @@ struct BinaryHeapPQ : PQ {
     }
 
     std::pair<int, int> pop() override {
+        ++pop_count;
+
         Entry* root_entry = heap[0];
         int d = root_entry->dist;
         int n = root_entry->node;
@@ -133,6 +137,8 @@ struct BinaryHeapPQ : PQ {
     // FIX: Cast 'node' to std::size_t to resolve the signed/unsigned warning
     // --------------------------------------------------------
     void decrease_key(int node, int dist) override {
+        ++decrease_key_count;
+
         // FIX APPLIED: Cast 'node' to std::size_t for comparison with vector::size()
         if ((std::size_t)node >= node_to_index.size() || node_to_index[node] == NOT_IN_HEAP) {
             push(node, dist);

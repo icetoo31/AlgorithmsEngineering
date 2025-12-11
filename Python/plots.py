@@ -14,18 +14,26 @@ LABELS = {
 
 COLORS = {
     "b": "#925E78",
-    "e": "#8B9556",
+    "e": "#8B9556",s
     "p": "#DD7230",
     "f": "#537D8D",
 }
 
 # Regular Expression to capture Heap, N, M, and Time
 # Format: Heap: b, N: 100, M: 500, Time: 0.0000330000
-LINE_RE = re.compile(r"Heap:\s*([bepf]),\s*N:\s*(\d+),\s*M:\s*(\d+),\s*Time:\s*([0-9.eE+-]+)")
+LINE_RE = re.compile(r"Heap:\s*([bepf]),\s*N:\s*(\d+),\s*M:\s*(\d+),\s*Time:\s*([0-9.eE+-]+)"
+                     r"(?:,\s*Pushes:\s*(\d+),\s*DecreaseKey:\s*(\d+),\s*Pops:\s*(\d+))?")
 
 def parse_and_average(path: Path):
-    # data[heap][n] = list of times (from all M values for this N)
-    data = {h: defaultdict(list) for h in LABELS.keys()}
+    # time_data[heap][n] = list of runtimes
+    time_data = {h: defaultdict(list) for h in LABELS.keys()}
+s
+    # op_data[metric][heap][n] = list of counts
+    metrics = ["pushes", "decrease", "pops"]
+    op_data = {
+        metric: {h: defaultdict(list) for h in LABELS.keys()}
+        for metric in metrics
+    }
 
     try:
         with path.open("r", encoding="utf-8", errors="ignore") as f:
@@ -33,27 +41,48 @@ def parse_and_average(path: Path):
                 m = LINE_RE.match(line.strip())
                 if not m:
                     continue
-                
-                # Capture the groups: (1: heap, 2: N, 3: M, 4: Time)
+
                 heap = m.group(1)
                 n = int(m.group(2))
-                # m_val is ignored, as requested (averaging over M for a given N)
                 t = float(m.group(4))
-                
-                # Store time keyed only by N
-                data[heap][n].append(t)
+
+                # Always store times
+                time_data[heap][n].append(t)
+
+                # Optional operation counts
+                pushes_str = m.group(5)
+                dec_str    = m.group(6)
+                pops_str   = m.group(7)
+
+                if pushes_str is not None:
+                    pushes = int(pushes_str)
+                    dec    = int(dec_str)
+                    pops   = int(pops_str)
+
+                    op_data["pushes"][heap][n].append(pushes)
+                    op_data["decrease"][heap][n].append(dec)
+                    op_data["pops"][heap][n].append(pops)
     except FileNotFoundError:
-        return None, None
+        return None, None, None, None
 
-    # avg[heap] = { n: avg_time }
-    avg = {}
+    # Average runtime: avg_time[heap][n] = avg_time
+    avg_time = {}
     for heap in LABELS.keys():
-        avg[heap] = {}
-        # Iterate over all N values for this heap
-        for n, times in data[heap].items():
-            avg[heap][n] = sum(times) / len(times)
+        avg_time[heap] = {}
+        for n, times in time_data[heap].items():
+            avg_time[heap][n] = sum(times) / len(times)
 
-    return avg, data
+    # Average operations: avg_ops[metric][heap][n] = avg_count
+    avg_ops = {metric: {} for metric in metrics}
+    for metric in metrics:
+        for heap in LABELS.keys():
+            avg_ops[metric][heap] = {}
+            for n, vals in op_data[metric][heap].items():
+                if vals:
+                    avg_ops[metric][heap][n] = sum(vals) / len(vals)
+
+    return avg_time, time_data, avg_ops, op_data
+
 
 def plot_overall_average(avg_data):
     # avg_data[heap] = { n: avg_time }
@@ -98,30 +127,65 @@ def plot_overall_average(avg_data):
     plt.savefig(out_path, dpi=200)
     print(f"Saved plot for Overall Average to: {out_path}")
 
+def plot_operation_metric(avg_for_metric, title, ylabel, filename_suffix):
+    """
+    avg_for_metric: dict[heap][n] -> avg count (for one metric, e.g. pushes)
+    """
+    out_dir = Path("plots")
+    out_dir.mkdir(exist_ok=True)
 
-def main(input_filename="IO/dense_output.txt"):
-    # Allow passing the filename via command line arguments
-    in_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(input_filename)
-    
-    if not in_path.exists():
-        print(f"ERROR: cannot find {in_path}")
-        sys.exit(1)
+    plt.figure()
 
-    # avg is now data[heap][n] = avg_time
-    avg, raw = parse_and_average(in_path) 
-    
-    if avg is None:
-        print(f"ERROR: Error reading or parsing {in_path}")
-        sys.exit(1)
+    for heap, label in LABELS.items():
+        ns = sorted(avg_for_metric[heap].keys())
+        if not ns:
+            continue
+        ys = [avg_for_metric[heap][n] for n in ns]
+        plt.plot(ns, ys, marker="o", label=label)
 
-    # Sanity check: did we parse anything?
-    total_points = sum(len(raw[h]) for h in raw)
-    if total_points == 0:
-        print("ERROR: no matching lines found. Expected format: 'Heap: b, N: 100, M: 500, Time: 0.0000330000'")
-        sys.exit(1)
+    plt.xlabel("Number of nodes N")
+    plt.ylabel(ylabel)
+    plt.title(title)
 
-    # Generate the single plot for overall average
-    plot_overall_average(avg)
+    # Linear scales (no log)
+    plt.legend()
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+
+    out_path = out_dir / f"{filename_suffix}_overall_linear.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    print(f"Saved plot for {title} to: {out_path}")
+
+
+def plot_operation_metric(avg_for_metric, title, ylabel, filename_suffix):
+    """
+    avg_for_metric: dict[heap][n] -> avg count (for one metric, e.g. pushes)
+    """
+    out_dir = Path("plots")
+    out_dir.mkdir(exist_ok=True)
+
+    plt.figure()
+
+    for heap, label in LABELS.items():
+        ns = sorted(avg_for_metric[heap].keys())
+        if not ns:
+            continue
+        ys = [avg_for_metric[heap][n] for n in ns]
+        plt.plot(ns, ys, marker="o", label=label)
+
+    plt.xlabel("Number of nodes N")
+    plt.ylabel(ylabel)
+    plt.title(title)
+
+    # Linear scales (no log)
+    plt.legend()
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+
+    out_path = out_dir / f"{filename_suffix}_overall_linear.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    print(f"Saved plot for {title} to: {out_path}")
+
 
 if __name__ == "__main__":
     main()
