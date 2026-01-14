@@ -18,27 +18,31 @@ struct PairingHeapPQ : PQ {
         int dist, node;
         Node* child;    // leftmost child
         Node* sibling;  // next sibling
-        Node* parent;   // <--- NEW: Pointer to the parent node
+        Node* parent;   // Pointer to the parent node
+        Node* prev_sibling;  // Previous sibling for O(1) detach
         
-        Node(int d, int n) : dist(d), node(n), child(nullptr), sibling(nullptr), parent(nullptr) {}
+        Node(int d, int n) : dist(d), node(n), child(nullptr), sibling(nullptr), parent(nullptr), prev_sibling(nullptr) {}
         
         // Helper to detach a node from its parent/siblings for cut operation
-        // This is necessary for a truly non-lazy implementation.
         void detach() {
             if (parent) {
+                // Remove from sibling list using doubly-linked structure
                 if (parent->child == this) {
                     parent->child = sibling;
-                } else {
-                    Node* current = parent->child;
-                    while (current && current->sibling != this) {
-                        current = current->sibling;
+                    if (sibling) {
+                        sibling->prev_sibling = nullptr;
                     }
-                    if (current) {
-                        current->sibling = sibling;
+                } else {
+                    if (prev_sibling) {
+                        prev_sibling->sibling = sibling;
+                    }
+                    if (sibling) {
+                        sibling->prev_sibling = prev_sibling;
                     }
                 }
                 parent = nullptr;
                 sibling = nullptr;
+                prev_sibling = nullptr;
             }
         }
     };
@@ -48,7 +52,7 @@ struct PairingHeapPQ : PQ {
 
     // --------------------------------------------------------
     // Merge two pairing heap trees
-    // Updated to handle parent pointers!
+    // Updated to handle parent and prev_sibling pointers
     // --------------------------------------------------------
     Node* merge(Node* a, Node* b) {
         if (!a) return b;
@@ -58,11 +62,12 @@ struct PairingHeapPQ : PQ {
             std::swap(a, b);
 
         // b becomes the first child of a
-        b->parent = a;          // Set parent for b
+        b->parent = a;
         b->sibling = a->child;
+        b->prev_sibling = nullptr;
+        
         if (a->child) {
-            // Note: We don't need to update the old first child's parent/sibling, 
-            // as 'a->child' is now pointing to the old child's sibling list head.
+            a->child->prev_sibling = b;
         }
         a->child = b;
         
@@ -71,8 +76,7 @@ struct PairingHeapPQ : PQ {
 
     // --------------------------------------------------------
     // Two-pass merge (recursive pairing)
-    // No change required to the logic, as parent pointers are reset 
-    // during the merge process.
+    // Reset parent and prev_sibling pointers during merge
     // --------------------------------------------------------
     Node* two_pass_merge(Node* first) {
         if (!first || !first->sibling)
@@ -90,9 +94,11 @@ struct PairingHeapPQ : PQ {
             // Reset connections for nodes being merged
             a->sibling = nullptr;
             a->parent = nullptr;
+            a->prev_sibling = nullptr;
             if (b) {
                 b->sibling = nullptr;
                 b->parent = nullptr;
+                b->prev_sibling = nullptr;
             }
 
             arr.push_back(merge(a, b));

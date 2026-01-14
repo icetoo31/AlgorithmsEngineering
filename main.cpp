@@ -8,7 +8,10 @@
 #include <ctime>
 #include <utility>
 #include <iomanip>
-#include <cmath> 
+#include <cmath>
+#include <filesystem>
+#include <algorithm>
+#include <random> 
 
 // Assuming these are defined in your headers/source files
 #include "headers/dijkstra.h"
@@ -77,9 +80,21 @@ std::vector<std::pair<int, int>> generate_test_cases(
 
 int main() {
     // Initialization
-    std::srand(std::time(0)); 
-    const int NUM_TRIALS = 1; 
+    std::srand(std::time(0));
+    std::mt19937 rng(std::time(0));  // Random number generator for shuffling heap order
+    const int NUM_TRIALS = 3; 
     const int MAX_WEIGHT = 1000;
+    
+    // Clean up IO folder - delete all files before starting
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator("IO")) {
+            if (std::filesystem::is_regular_file(entry.path())) {
+                std::filesystem::remove(entry.path());
+            }
+        }
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Error cleaning IO folder: " << e.what() << std::endl;
+    }
     
     // File Streams
     // Note: ios::trunc is added to verificationFile to ensure it only contains the first run's output.
@@ -100,18 +115,18 @@ int main() {
 
     // 1. O(N) Sparsity: M is proportional to N (e.g., M = 5N)
     std::vector<std::pair<int, int>> sparseCases = generate_test_cases(
-        100,            // start_N
-        1000,          // end_N
-        5000,            // step_N
+        200000,            // start_N
+        50001,          // end_N
+        2000,            // step_N
         3.0,            // multiplier (c=2)
         1.0             // exponent (k=1.0 for O(N) -> M = 2*N)
     );
 
     // 2. O(N^2) Density: M is proportional to N^2 (e.g., M = 0.5% of N^2)
     std::vector<std::pair<int, int>> denseCases = generate_test_cases(
-        40000,            // start_N
-        40001,           // end_N
-        5000,            // step_N
+        2000,            // start_N
+        30001,           // end_N
+        2000,            // step_N
         0.5,          
         2.0             // exponent (k=2.0 for O(N^2) -> M = N^2)
     );
@@ -131,7 +146,13 @@ int main() {
             int nodes = testCase.first;
             int edges = testCase.second;
 
-            if (nodes <= 0 || edges <= 0) continue; 
+            if (nodes <= 0 || edges <= 0) continue;
+            
+            std::cout << "Testing N = " << nodes << std::endl;
+
+            // Storage for times across all trials for each heap type
+            std::vector<double> binaryTimes, eightaryTimes, pairingTimes, fibonacciTimes;
+            std::vector<int> first_distances; // For verification
 
             // --- Trials for a single (N, M) configuration ---
             for (int trial = 1; trial <= NUM_TRIALS; ++trial) {
@@ -146,6 +167,9 @@ int main() {
                     {'p', new PairingHeapPQ()},
                     {'f', new FibonacciHeapPQ()}
                 };
+                
+                // Shuffle the heap order to avoid sequential execution bias
+                std::shuffle(runVariants.begin(), runVariants.end(), rng);
 
                 // 3. FOR EACH HEAP TYPE, RUN THE BENCHMARK
                 for (const auto& heapVariant : runVariants) {
@@ -155,10 +179,11 @@ int main() {
 
                     std::vector<int> distances = runDijkstra(*pq, adj, nodes, duration);
 
-                    // OUTPUT TIME TO THE SPECIFIC FILE
-                    output_file << "Heap: " << heapType << ", N: " << nodes 
-                            << ", M: " << edges << ", Time: " << duration << "\n";
-                    
+                    // Store times for median calculation
+                    if (heapType == 'b') binaryTimes.push_back(duration);
+                    else if (heapType == 'e') eightaryTimes.push_back(duration);
+                    else if (heapType == 'p') pairingTimes.push_back(duration);
+                    else if (heapType == 'f') fibonacciTimes.push_back(duration);
 
                     // --- DISTANCE VERIFICATION OUTPUT (Only first trial EVER) ---
                     if (is_first_trial_ever) {
@@ -182,6 +207,25 @@ int main() {
                 }
                 
             } // End of NUM_TRIALS loop
+
+            // Output all trial times for each heap type (for deviation calculation in plotting)
+            for (double t : binaryTimes) {
+                output_file << "Heap: b, N: " << nodes << ", M: " << edges 
+                           << ", Time: " << t << "\n";
+            }
+            for (double t : eightaryTimes) {
+                output_file << "Heap: e, N: " << nodes << ", M: " << edges 
+                           << ", Time: " << t << "\n";
+            }
+            for (double t : pairingTimes) {
+                output_file << "Heap: p, N: " << nodes << ", M: " << edges 
+                           << ", Time: " << t << "\n";
+            }
+            for (double t : fibonacciTimes) {
+                output_file << "Heap: f, N: " << nodes << ", M: " << edges 
+                           << ", Time: " << t << "\n";
+            }
+
             output_file << "\n"; // Separator between different graph sizes (N, M)
         } // End of cases loop
     };
